@@ -139,7 +139,7 @@ cursor = mysql_con.cursor()
 
 # Crear la tabla en MySQL si no existe
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS extraccion2 (
+CREATE TABLE IF NOT EXISTS extraccion (
     id INT AUTO_INCREMENT PRIMARY KEY,
     chat_row_id INT,
     timestamp DATETIME,
@@ -156,20 +156,33 @@ CREATE TABLE IF NOT EXISTS extraccion2 (
 """)
 
 # Preparar la consulta SQL para insertar los datos en MySQL
-add_message = ("""
-INSERT INTO extraccion2
-(chat_row_id, timestamp, received_timestamp, text_data, from_me, number,status,verified_name,description, cliente, estado) 
-VALUES (%s, %s, %s, %s,%s, %s, %s, %s, %s, %s, %s)
-""")
+add_message = """
+INSERT INTO extraccion
+(chat_row_id, timestamp, received_timestamp, text_data, from_me, number, status, verified_name, description, cliente, estado) 
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
 
 msg['timestamp'] = msg['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
 msg['received_timestamp'] = msg['received_timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
-# Insertar los datos fila por fila
-for i, row in msg.iterrows():
-    data_message = (row['chat_row_id'], row['timestamp'], row['received_timestamp'], row['text_data'], 
-                    row['from_me'], row['number'], row['status'], row['verified_name'], row['description'], row['cliente'], row['estado'])
-    cursor.execute(add_message, data_message)
+# Preparar los datos para la inserción
+data_to_insert = [
+    (
+        row['chat_row_id'],
+        row['timestamp'],
+        row['received_timestamp'],
+        row['text_data'],
+        bool(row['from_me']),  # Asegurarse de que este valor sea un booleano
+        row['number'],
+        row['status'],
+        row['verified_name'],
+        row['description'],
+        row['cliente'],
+        row['estado']
+    ) for i, row in msg.iterrows()
+]
+cursor.executemany(add_message, data_to_insert)
 
 # Hacer commit de la transacción
 mysql_con.commit()
@@ -179,3 +192,4 @@ cursor.close()
 mysql_con.close()
 
 print("Tabla creada (si no existía) y datos subidos con éxito.")
+
