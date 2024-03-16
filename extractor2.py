@@ -4,43 +4,43 @@ from datetime import datetime
 import emoji
 import mysql.connector
 import os
-from PyInquirer import prompt
 
 config_file_path = 'config.txt'
 
-def read_or_prompt_config_with_pyinquirer():
-    questions = [
-        {
-            'type': 'input',
-            'name': 'cliente',
-            'message': 'Ingrese el nombre del cliente:',
-        },
-        {
-            'type': 'input',
-            'name': 'estado',
-            'message': 'Ingrese el nombre del estado:',
-        },
-        {
-            'type': 'input',
-            'name': 'municipio',
-            'message': 'Ingrese el nombre del municipio:',
-        }
-    ]
-    
-    config = {}
-    if os.path.exists(config_file_path) and os.path.getsize(config_file_path) > 0:
+def get_or_prompt_config():
+    """Lee o solicita al usuario la configuración específica."""
+    # Verificar si el archivo de configuración ya existe y tiene contenido
+    if os.path.isfile(config_file_path) and os.path.getsize(config_file_path) > 0:
         with open(config_file_path, 'r') as file:
-            for line in file:
-                key, value = line.strip().split('=', 1)
-                config[key] = value
+            config = {line.split('=')[0]: line.split('=')[1].strip() for line in file if line.strip()}
     else:
-        answers = prompt(questions)
-        config = answers
+        print("Bienvenido, configuraremos algunos detalles antes de empezar.")
+        
+        # Solicitar al usuario que indique qué configuraciones quiere especificar
+        configuraciones_disponibles = ['cliente', 'estado', 'municipio']
+        print("Por favor, indica qué configuraciones deseas establecer. Escribe 'todo' para todas o las opciones separadas por comas (ejemplo: cliente,estado).")
+        opciones_usuario = input("Configuraciones: ").strip().lower()
+        opciones = opciones_usuario.split(',')
+        
+        config = {}
+        if 'todo' in opciones:
+            for conf in configuraciones_disponibles:
+                config[conf] = input(f'Ingrese el {conf}: ').strip()
+        else:
+            for conf in opciones:
+                if conf in configuraciones_disponibles:
+                    config[conf] = input(f'Ingrese el {conf}: ').strip()
+        
+        # Guardar las configuraciones en un archivo
         with open(config_file_path, 'w') as file:
             for key, value in config.items():
                 file.write(f'{key}={value}\n')
-    
+
     return config
+
+
+# Uso de la función para obtener la configuración
+config = get_or_prompt_config()
 
 # Conexión a la base de datos msgstore.db y lectura de datos
 con = sqlite3.connect('/sdcard/msgstore.db')
@@ -48,6 +48,9 @@ try:
     chv = pd.read_sql_query("SELECT * from chat_view", con)
 except pd.io.sql.DatabaseError:
     chv = None  # En caso de que el query no devuelva resultados
+
+usuarios = pd.read_sql_query("SELECT * from 'jid'",con)
+
 msg = pd.read_sql_query("SELECT * from message", con)
 con.close()
 
@@ -63,6 +66,10 @@ names = pd.read_sql_query("SELECT * from wa_vnames", con1)
 names['jid'] = names['jid'].str.split('@').str[0]
 con1.close()
 
+usuarios['user'] = usuarios['user'].astype(str)
+usuarios['user'] = usuarios['user'].str[3:]
+usuarios['server'] = usuarios['server'].apply(lambda x: 'celular' if x.endswith('.net') else ('grupo' if x.endswith('.us') else 'otro'))
+
 # Pre-procesamiento de msg
 msg = msg.loc[:, ['chat_row_id', 'timestamp', 'received_timestamp', 'text_data', 'from_me']]
 msg = msg.dropna(subset=['text_data'])  # Eliminar filas donde text_data es NaN
@@ -71,18 +78,35 @@ msg['received_timestamp'] = pd.to_datetime(msg['received_timestamp'], unit='ms')
 
 # Función para mapear chat_row_id a número de teléfono
 def mapping(id):
-    if chv is not None:
-        phone = chv.loc[chv['_id'] == id, 'raw_string_jid'].iloc[0].split('@')[0]
-        return phone
-    else:
-        return None
+    phone = chv.loc[chv['_id'] == id, 'raw_string_jid'].iloc[0]
+    phone = phone.split('@')[0]
+    return phone
+
+def mapping2(id):
+    phone2 = usuarios.loc[usuarios['_id'] == id, 'user'].iloc[0]
+    return phone2
+
+def mapping3(id):
+    server = usuarios.loc[usuarios['_id'] == id, 'server'].iloc[0]
+    return server
+
+def mapping4(id):
+    server = usuarios.loc[usuarios['_id'] == id, 'device'].iloc[0]
+    return server
+
+def mapping5(id):
+    name = chv.loc[chv['_id'] == id, 'subject'].iloc[0]
+    return name
 
 
-msg['number'] = msg['chat_row_id'].apply(mapping)
 
-# Enriquecimiento de los datos de msg con los datos de contacts, names, y descriptions
-msg = pd.merge(msg, contacts[['jid', 'status']], left_on='number', right_on='jid', how='left').drop('jid', axis=1)
-msg = pd.merge(msg, names[['jid', 'verified_name']], left_on='number', right_on='jid', how='left').drop('jid', axis=1)
+msg['number'] = msg['chat_row_id'].apply(lambda x: mapping(x))
+msg['number2'] = msg['chat_row_id'].apply(lambda x: mapping2(x))
+msg = pd.merge(msg, contacts[['jid', 'status']], left_on='number2', right_on='jid', how='left').drop('jid', axis=1)
+msg = pd.merge(msg, names[['jid', 'verified_name']], left_on='number2', right_on='jid', how='left').drop('jid', axis=1)
+msg['server'] = msg['chat_row_id'].apply(lambda x: mapping3(x))
+msg['device'] = msg['chat_row_id'].apply(lambda x: mapping4(x))
+msg['group'] = msg['chat_row_id'].apply(lambda x: mapping5(x))
 msg = pd.merge(msg, descriptions[['jid', 'description']], left_on='number', right_on='jid', how='left').drop('jid', axis=1)
 
 # Reemplazando NaN por None para los campos enriquecidos
@@ -95,9 +119,11 @@ def remove_emojis(text):
     # Si no es None, procede a eliminar los emojis
     return emoji.replace_emoji(text, replace='')
 
+
 # Asumiendo que msg es tu DataFrame y ya está definido
 msg['text_data'] = msg['text_data'].apply(remove_emojis)
 msg['description'] = msg['description'].apply(remove_emojis)
+msg['group'] = msg['group'].apply(remove_emojis)
 msg['timestamp'] = pd.to_datetime(msg['timestamp'], format='%m/%d/%Y %I:%M:%S %p')
 msg['cliente'] = config['cliente']
 msg['estado'] = config['estado']
@@ -124,8 +150,16 @@ mysql_con = mysql.connector.connect(
 cursor = mysql_con.cursor()
 
 # Crear la tabla en MySQL si no existe
+MYSQL_USER = "admin"
+MYSQL_PASS = "F@c3b00k"
+MYSQL_HOST = "158.69.26.160"
+MYSQL_DB = "data_wa"
+
+mysql_con = mysql.connector.connect(host=MYSQL_HOST, user=MYSQL_USER, password=MYSQL_PASS, database=MYSQL_DB)
+cursor = mysql_con.cursor()
+
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS extraccion (
+CREATE TABLE IF NOT EXISTS extraccion4 (
     id INT AUTO_INCREMENT PRIMARY KEY,
     chat_row_id INT,
     timestamp DATETIME,
@@ -133,20 +167,24 @@ CREATE TABLE IF NOT EXISTS extraccion (
     text_data TEXT,
     from_me BOOLEAN,
     number VARCHAR(255),
+    number2 VARCHAR(255),
     status VARCHAR(255),
     verified_name VARCHAR(255),
+    server VARCHAR(255),
+    device VARCHAR(255),
+    group_name VARCHAR(255),          
     description TEXT,
     cliente VARCHAR(255),
     estado VARCHAR(255),
-    municipio VARChaR(255)
+    municipio VARCHAR(255)
 )
 """)
 
 # Preparar la consulta SQL para insertar los datos en MySQL
 add_message = """
-INSERT INTO extraccion
-(chat_row_id, timestamp, received_timestamp, text_data, from_me, number, status, verified_name, description, cliente, estado,municipio) 
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s)
+INSERT INTO extraccion4
+(chat_row_id, timestamp, received_timestamp, text_data, from_me, number, number2, status, verified_name, server, device, group_name, description, cliente, estado, municipio) 
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
 """
 
 
@@ -160,16 +198,20 @@ data_to_insert = [
         row['timestamp'],
         row['received_timestamp'],
         row['text_data'],
-        bool(row['from_me']),  # Asegurarse de que este valor sea un booleano
+        row['from_me'],  # Convertido a booleano si es necesario
         row['number'],
+        row['number2'],
         row['status'],
         row['verified_name'],
+        row['server'],
+        row['device'],
+        row['group'],
         row['description'],
         row['cliente'],
         row['estado'],
         row['municipio']
-    ) for i, row in msg.iterrows()
-]
+    ) for index, row in msg.iterrows()
+]   
 cursor.executemany(add_message, data_to_insert)
 
 # Hacer commit de la transacción
