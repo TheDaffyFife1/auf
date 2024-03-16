@@ -8,42 +8,27 @@ import os
 config_file_path = 'config.txt'
 
 def get_or_prompt_config():
-    """Lee o solicita al usuario la configuración específica."""
-    # Verificar si el archivo de configuración ya existe y tiene contenido
+    """Lee la configuración de un archivo o la solicita al usuario."""
     if os.path.isfile(config_file_path) and os.path.getsize(config_file_path) > 0:
         with open(config_file_path, 'r') as file:
             config = {line.split('=')[0]: line.split('=')[1].strip() for line in file if line.strip()}
     else:
         print("Bienvenido, configuraremos algunos detalles antes de empezar.")
-        
-        # Solicitar al usuario que indique qué configuraciones quiere especificar
-        configuraciones_disponibles = ['cliente', 'estado', 'municipio']
-        print("Por favor, indica qué configuraciones deseas establecer. Escribe 'todo' para todas o las opciones separadas por comas (ejemplo: cliente,estado).")
-        opciones_usuario = input("Configuraciones: ").strip().lower()
-        opciones = opciones_usuario.split(',')
-        
-        config = {}
-        if 'todo' in opciones:
-            for conf in configuraciones_disponibles:
-                config[conf] = input(f'Ingrese el {conf}: ').strip()
-        else:
-            for conf in opciones:
-                if conf in configuraciones_disponibles:
-                    config[conf] = input(f'Ingrese el {conf}: ').strip()
-        
-        # Guardar las configuraciones en un archivo
+        config = {
+            'cliente': input('Ingrese el nombre del cliente: ').strip(),
+            'estado': input('Ingrese el nombre del estado: ').strip(),
+            'municipio': input('Ingrese el nombre del municipio: ').strip(),
+        }
         with open(config_file_path, 'w') as file:
             for key, value in config.items():
                 file.write(f'{key}={value}\n')
-
     return config
-
 
 # Uso de la función para obtener la configuración
 config = get_or_prompt_config()
 
 # Conexión a la base de datos msgstore.db y lectura de datos
-con = sqlite3.connect('/sdcard/msgstore.db')
+con = sqlite3.connect('msgstore.db')
 try:
     chv = pd.read_sql_query("SELECT * from chat_view", con)
 except pd.io.sql.DatabaseError:
