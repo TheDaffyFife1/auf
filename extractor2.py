@@ -28,7 +28,7 @@ def get_or_prompt_config():
 config = get_or_prompt_config()
 
 # Conexión a la base de datos msgstore.db y lectura de datos
-con = sqlite3.connect('msgstore.db')
+con = sqlite3.connect('/sdcard/msgstore.db')
 try:
     chv = pd.read_sql_query("SELECT * from chat_view", con)
 except pd.io.sql.DatabaseError:
