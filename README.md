@@ -46,3 +46,13 @@ Para ejecutar el código de manera automática, ejecuta el script principal:
 ./main.sh
 ```
 **Este es solo para funcionar con Termux para usar con Tasker mover el main.sh**
+
+### Instalacion de termux-api
+Para ejecutar el código:
+```sh
+pkg update
+pkg upgrade
+pkg install termux-api
+```
+
+
