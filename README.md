@@ -1,4 +1,4 @@
-# Instalación y Extracción para WhatsApp
+# Instalación y Extracción para WhatsApp desde dispositivos moviles
 
 Para hacer funcionar esta herramienta, utilizaremos Termux. Además, para la automatización, agregaremos Tasker y Termux:Tasker.
 
@@ -45,4 +45,4 @@ Para ejecutar el código de manera automática, ejecuta el script principal:
 ```sh
 ./main.sh
 ```
-**Este es solo para funcionar con Termux**
+**Este es solo para funcionar con Termux para usar con Tasker mover el main.sh**
