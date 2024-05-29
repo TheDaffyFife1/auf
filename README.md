@@ -45,3 +45,4 @@ Para ejecutar el código de manera automática, ejecuta el script principal:
 ```sh
 ./main.sh
 ```
+**Este es solo para funcionar con Termux**
