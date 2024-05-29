@@ -19,3 +19,7 @@ Abre Termux y ejecuta los siguientes comandos para actualizar los paquetes:
 pkg update
 pkg upgrade
 pkg install git
+pkg install tur-repo -y
+pkg install python-pandas -y
+pip install mysql-connector-python
+pip install emoji
